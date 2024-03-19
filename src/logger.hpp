@@ -9,9 +9,9 @@ struct logger_t
 {
 
     void log( const char *message ) {
-#ifdef LOG
+        #ifdef LOG
         std::cout << message << std::endl;
-#endif
+        #endif
     }
 
     template <typename... Args>

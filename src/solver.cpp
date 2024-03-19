@@ -2,23 +2,48 @@
 #include <cassert>
 #include "logger.hpp"
 
+/// Global ////////////////////////////////////////////////////////////////////
+
+
 logger_t logger;
+
+
+/// Misc. /////////////////////////////////////////////////////////////////////
+
+
+void log_trail( const char *message, solver& s )
+{
+    for ( auto &l : s.trail )
+    {
+        logger.log( message, "%d@%d", l, s.lit_level[ l ] );
+    }
+}
+
+
+size_t count_pos( literal_map< short > m, var_t var_count )
+{
+    size_t count = 0;
+    for ( var_t v = 1; v <= var_count; v++ )
+    {
+        if ( m[ v ] ) count += 1;
+        if ( m[ -v ] ) count += 1;
+    }
+    return count;
+}
+
+
+/// Solver ////////////////////////////////////////////////////////////////////
+
 
 solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , clauses( std::move( cnf.clauses ) )
-                            , var_counter( 1 )
                             , watched_in( cnf.var_count )
-                            , reason( cnf.var_count, idx_undef )
                             , lit_level( cnf.var_count, -1 )
+                            , reason( cnf.var_count, idx_undef )
                             , to_resolve( cnf.var_count, 0 )
                             , learnt_lit( cnf.var_count, 0 )
 {
     values.resize( cnf.var_count + 1, val_un );
-
-    for ( idx_t i = 0; i < var_count + 1; i++ )
-    {
-        logger.log( "val", "%d -> %f", i, values[ i ]  );
-    }
 
     for ( idx_t i = 0; i < clauses.size(); i++ )
     {
@@ -30,6 +55,49 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
     }
 }
 
+
+sat_t solver::solve()
+{
+    for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
+        if ( clauses[ i_c ].size() == 1 )
+            unit_queue.push_back( i_c );
+
+    while ( true )
+    {
+        logger.log( "new cycle" );
+        log_trail( "new cycle", *this );
+        // logger.log( "decisions", "%d", decisions.size() );
+
+        if ( sidx_t i_c = unit_propagation(); i_c != idx_undef )
+        {
+            logger.log( "conflict", clauses[ i_c ] );
+
+            if ( decisions.empty() ) return UNSAT;
+            unit_queue.clear();
+
+            auto [ new_clause, target_level ] = conflict_anal( i_c );
+
+            idx_t i_new_clause = learn( std::move( new_clause ) );
+            backtrack( target_level );
+            logger.log( "new_clause", clauses[ i_new_clause ] );
+            unit_queue.push_back( i_new_clause );
+            continue;
+        }
+
+        lit_t l = pick_literal();
+        if ( l == 0 )
+            break;
+
+        logger.log( "pick", "%d", l );
+        decide( l );
+    }
+    return SAT;
+}
+
+
+/// Picking literal ///////////////////////////////////////////////////////////
+
+
 lit_t solver::pick_literal()
 {
     for ( idx_t v_i = 1; v_i < var_count + 1; v_i++ )
@@ -37,6 +105,10 @@ lit_t solver::pick_literal()
             return - v_i;
     return 0;
 }
+
+
+/// Values ////////////////////////////////////////////////////////////////////
+
 
 val_t solver::eval_lit( lit_t l )
 {
@@ -46,12 +118,16 @@ val_t solver::eval_lit( lit_t l )
 }
 
 
+/// Backtracking //////////////////////////////////////////////////////////////
+
+
 sidx_t solver::decide( lit_t l )
 {
     decisions.push_back( trail.size() );
     decision_level += 1;
     return assign( l );
 }
+
 
 sidx_t solver::assign( lit_t l )
 {
@@ -61,6 +137,43 @@ sidx_t solver::assign( lit_t l )
     lit_level[ l ] = decision_level;
     return update_watches( l );
 }
+
+
+void solver::kill_trail( idx_t i )
+{
+    // Assignments above decision.
+    for ( idx_t j = i; j < trail.size(); j++ )
+    {
+        auto &t_j = trail[ j ];
+        values[ var_of_lit( t_j ) ] = val_un;
+        reason[ t_j ] = idx_undef;
+        lit_level[ t_j ] = -1;
+    }
+    trail.resize( i );
+}
+
+
+void solver::backtrack( sidx_t target_level )
+{
+    logger.log( "backtrack", "%d", target_level  );
+
+    log_trail( "b", *this );
+
+
+    idx_t last_dec = decisions.back();
+    while ( decision_level > target_level )
+    {
+        last_dec = decisions.back();
+        decisions.pop_back();
+        decision_level--;
+    }
+
+    kill_trail( last_dec );
+}
+
+
+/// Unit propagation //////////////////////////////////////////////////////////
+
 
 /** Solver assigned l */
 sidx_t solver::update_watches( lit_t l )
@@ -206,7 +319,11 @@ sidx_t solver::unit_propagation()
     return idx_undef;
 }
 
-void solver::learn_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
+
+/// CDCL //////////////////////////////////////////////////////////////////////
+
+
+void solver::resolve_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
 {
     auto &c = clauses[ i_c ];
 
@@ -233,26 +350,15 @@ void solver::learn_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
             learnt_lit[ l ] = 1;
         }
     }
-
 }
 
-size_t count_pos( literal_map< short > m, var_t var_count )
-{
-    size_t count = 0;
-    for ( var_t v = 1; v <= var_count; v++ )
-    {
-        if ( m[ v ] ) count += 1;
-        if ( m[ -v ] ) count += 1;
-    }
-    return count;
-}
 
 std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
 {
     idx_t last_d_i = decisions.back();
 
     clause_t learnt_clause;
-    learn_part( learnt_clause, i_c, 0 );
+    resolve_part( learnt_clause, i_c, 0 );
 
     #ifdef CHECKED
     bool found = false;
@@ -266,6 +372,9 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     #endif
 
     idx_t j = trail.size() - 1;
+
+    // TODO: the set should remember the count, no need
+    // to do this all the time.
     while ( count_pos( to_resolve, var_count ) > 1 )
     {
         assert( j > last_d_i );
@@ -273,7 +382,7 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
         if ( to_resolve[ t_j ] )
         {
             assert( reason[ t_j ] != idx_undef );
-            learn_part( learnt_clause, reason[ t_j ], t_j );
+            resolve_part( learnt_clause, reason[ t_j ], t_j );
         }
         j--;
     }
@@ -346,48 +455,6 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     return std::pair( learnt_clause, next_dec_level );
 }
 
-void solver::kill_trail( idx_t i )
-{
-    // Assignments above decision.
-    for ( idx_t j = i; j < trail.size(); j++ )
-    {
-        auto &t_j = trail[ j ];
-        values[ var_of_lit( t_j ) ] = val_un;
-        reason[ t_j ] = idx_undef;
-        lit_level[ t_j ] = -1;
-    }
-    trail.resize( i );
-}
-
-void log_trail( const char *message, solver& s )
-{
-    for ( auto &l : s.trail )
-    {
-        logger.log( message, "%d@%d", l, s.lit_level[ l ] );
-    }
-}
-
-void solver::backtrack( sidx_t target_level )
-{
-    logger.log( "backtrack", "%d", target_level  );
-
-    log_trail( "b", *this );
-
-
-    idx_t last_dec = decisions.back();
-    while ( decision_level > target_level )
-    {
-        last_dec = decisions.back();
-        decisions.pop_back();
-        decision_level--;
-    }
-
-    kill_trail( last_dec );
-
-    //logger.log( "back queue", unit_queue );
-    //logger.log( "back trail", trail );
-    //logger.log( "back decs", decisions );
-}
 
 idx_t solver::learn( clause_t c )
 {
@@ -406,45 +473,3 @@ idx_t solver::learn( clause_t c )
     return i;
 }
 
-sat_t solver::solve()
-{
-    for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
-        if ( clauses[ i_c ].size() == 1 )
-            unit_queue.push_back( i_c );
-
-    while ( true )
-    {
-        logger.log( "new cycle" );
-        log_trail( "new cycle", *this );
-        // logger.log( "decisions", "%d", decisions.size() );
-
-        if ( sidx_t i_c = unit_propagation(); i_c != idx_undef )
-        {
-            logger.log( "conflict", clauses[ i_c ] );
-
-            if ( decisions.empty() ) return UNSAT;
-            unit_queue.clear();
-
-            auto [ new_clause, target_level ] = conflict_anal( i_c );
-
-            idx_t i_new_clause = learn( std::move( new_clause ) );
-            backtrack( target_level );
-            logger.log( "new_clause", clauses[ i_new_clause ] );
-            unit_queue.push_back( i_new_clause );
-            continue;
-        }
-
-        lit_t l = pick_literal();
-        if ( l == 0 )
-            break;
-
-        logger.log( "pick", "%d", l );
-        decide( l );
-    }
-    return SAT;
-}
-
-bool solver::done()
-{
-    return var_counter > var_count;
-}

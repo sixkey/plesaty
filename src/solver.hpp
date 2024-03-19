@@ -16,6 +16,12 @@ inline val_t val_of_lit( lit_t l ) { return l > 0 ? val_tt : val_ff; }
 
 inline var_t var_of_lit( lit_t l ) { return std::abs( l ); }
 
+
+///////////////////////////////////////////////////////////////////////////////
+// Solver /////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+
 template < typename T >
 struct literal_map
 {
@@ -41,65 +47,70 @@ struct literal_map
 };
 
 
+///////////////////////////////////////////////////////////////////////////////
+// Solver /////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
 
 struct solver
 {
+    solver( cnf_t cnf );
+    sat_t solve();
+
+    // Formula 
+
     size_t var_count;
-    var_t var_counter = 1;
 
     std::vector< std::vector< lit_t > > clauses;
-
-    // Constructor
-
-    solver( cnf_t cnf );
 
     // Picking literal
 
     lit_t pick_literal();
 
-    // Variable state
-
-    literal_map< std::vector< idx_t > > watched_in;
-
-    literal_map< sidx_t > reason;
+    // Values
 
     std::vector< val_t > values;
-    std::vector< lit_t > trail;
-    std::vector< idx_t > decisions;
-
-    literal_map< sidx_t > lit_level;
-    sidx_t decision_level = 0;
-
-    std::deque< idx_t > unit_queue;
-
-    literal_map< short > to_resolve;
-    literal_map< short > learnt_lit;
-
-
 
     val_t eval_lit( lit_t l );
+
+    // Backtracking
+
+    std::vector< lit_t > trail;
+    std::vector< idx_t > decisions;
 
     sidx_t decide( lit_t l );
 
     sidx_t assign( lit_t l );
 
-    sidx_t update_watches( lit_t l );
-
-    sidx_t unit_propagation();
-
     void kill_trail( idx_t i );
 
     void backtrack( sidx_t dec_level );
 
-    idx_t learn( clause_t c );
+    // Unit propagation
 
-    void learn_part( clause_t& learnt_clause
-                   , idx_t i_c
-                   , lit_t r );
+    literal_map< std::vector< idx_t > > watched_in;
+    std::deque< idx_t > unit_queue;
+
+    sidx_t update_watches( lit_t l );
+
+    sidx_t unit_propagation();
+
+    // CDCL 
+    
+    literal_map< sidx_t > lit_level;
+    sidx_t decision_level = 0;
+
+    literal_map< sidx_t > reason;
+    literal_map< short > to_resolve;
+    literal_map< short > learnt_lit;
+
+    void resolve_part( clause_t& learnt_clause
+                     , idx_t i_c
+                     , lit_t r );
 
     std::pair< clause_t, idx_t > conflict_anal( sidx_t i_c );
 
-    bool done();
+    idx_t learn( clause_t c );
 
-    sat_t solve();
+
 };
