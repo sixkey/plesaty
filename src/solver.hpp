@@ -16,7 +16,7 @@ inline val_t val_of_lit( lit_t l ) { return l > 0 ? val_tt : val_ff; }
 
 inline var_t var_of_lit( lit_t l ) { return std::abs( l ); }
 
-template < typename T >  
+template < typename T >
 struct literal_map
 {
     std::vector< T > content;
@@ -35,7 +35,7 @@ struct literal_map
 
     T& operator[]( lit_t l )
     {
-        return content[ var_of_lit( l ) - 1 
+        return content[ var_of_lit( l ) - 1
                       + val_of_lit( l ) * var_count ];
     }
 };
@@ -51,14 +51,14 @@ struct solver
 
     // Constructor
 
-    solver( cnf_t cnf );  
+    solver( cnf_t cnf );
 
     // Picking literal
-    
+
     lit_t pick_literal();
 
     // Variable state
-    
+
     literal_map< std::vector< idx_t > > watched_in;
 
     literal_map< sidx_t > reason;
@@ -75,7 +75,7 @@ struct solver
     literal_map< short > to_resolve;
     literal_map< short > learnt_lit;
 
-    
+
 
     val_t eval_lit( lit_t l );
 

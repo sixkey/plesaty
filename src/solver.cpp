@@ -1,4 +1,4 @@
-#include "solver.hpp" 
+#include "solver.hpp"
 #include <cassert>
 #include "logger.hpp"
 
@@ -12,7 +12,7 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , lit_level( cnf.var_count, -1 )
                             , to_resolve( cnf.var_count, 0 )
                             , learnt_lit( cnf.var_count, 0 )
-{ 
+{
     values.resize( cnf.var_count + 1, val_un );
 
     for ( idx_t i = 0; i < var_count + 1; i++ )
@@ -20,7 +20,7 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
         logger.log( "val", "%d -> %f", i, values[ i ]  );
     }
 
-    for ( idx_t i = 0; i < clauses.size(); i++ ) 
+    for ( idx_t i = 0; i < clauses.size(); i++ )
     {
         auto &c = clauses[ i ];
         assert( ! c.empty() );
@@ -48,7 +48,7 @@ val_t solver::eval_lit( lit_t l )
 
 sidx_t solver::decide( lit_t l )
 {
-    decisions.push_back( trail.size() );  
+    decisions.push_back( trail.size() );
     decision_level += 1;
     return assign( l );
 }
@@ -77,14 +77,21 @@ sidx_t solver::update_watches( lit_t l )
         assert( c.size() > 1 );
 
         // If the clause is unit
-        
-        if ( eval_lit( c[ 0 ] ) == val_ff 
-          && eval_lit( c[ 1 ] ) == val_ff ) 
+
+        if ( eval_lit( c[ 0 ] ) == val_ff
+          && eval_lit( c[ 1 ] ) == val_ff )
+        {
+#ifdef CHECKED
+            for ( auto &l : c )
+                assert( eval_lit( l ) == val_ff );
+#endif
             return i_c;
+        }
+
 
         // wlog: l is in the 1 position.
-        
-        if ( c[ 0 ] == -l ) 
+
+        if ( c[ 0 ] == -l )
             std::swap( c[ 0 ], c[ 1 ] );
 
         assert( -l == c[ 1 ] );
@@ -97,10 +104,10 @@ sidx_t solver::update_watches( lit_t l )
         #endif
 
         // Check if first is solved
-        
+
         if ( eval_lit( c[ 0 ] ) == val_tt ) {
             i_w_l++;
-            continue; 
+            continue;
         }
 
         /** State: c[0] = unk, c[1] = false */
@@ -111,7 +118,7 @@ sidx_t solver::update_watches( lit_t l )
         #endif
 
         bool found = false;
-        for ( idx_t i_l = 2; i_l < c.size(); i_l++ ) 
+        for ( idx_t i_l = 2; i_l < c.size(); i_l++ )
         {
             val_t v = eval_lit( c[ i_l ] );
             if ( v == val_tt || v == val_un ) {
@@ -123,9 +130,9 @@ sidx_t solver::update_watches( lit_t l )
 
                 std::swap( c[ i_l ], c[ 1 ] );
                 if ( v == val_tt ) {
-                    // This swap is so that watched_in[ c[ 0 ] ] is 
-                    // the list through which we are iterating so 
-                    // that we can kick the clause in the current list. 
+                    // This swap is so that watched_in[ c[ 0 ] ] is
+                    // the list through which we are iterating so
+                    // that we can kick the clause in the current list.
                     std::swap( c[ 0 ], c[ 1 ] );
                 }
                 found = true;
@@ -164,7 +171,7 @@ sidx_t solver::unit_propagation()
         auto &c = clauses[ i_c ];
 
         // Condition: all except first literal are false
-        
+
         #ifdef CHECKED
         for ( idx_t i = 1; i < c.size(); i++ )
         {
@@ -172,27 +179,27 @@ sidx_t solver::unit_propagation()
             {
                 logger.log( "PROBLEM", c );
                 for ( auto &l : c )
-                    logger.log( "PROBLEM", "%d@%d -> %f", l, lit_level[ l ], eval_lit( l ) );
+                    logger.log( "PROBLEM", "%d@%d -> %f", -l, lit_level[ -l ], eval_lit( l ) );
             }
             assert( eval_lit( c[ i ] ) == val_ff );
         }
         #endif
-        
+
         // First is false
         val_t v = eval_lit( c[ 0 ] );
 
         //logger.log( "lol", "%d, %d = %d", c[ 0 ], c[ 1 ], v );
 
-        if ( v == val_tt ) 
+        if ( v == val_tt )
             continue;
-        else if ( v == val_ff ) 
+        else if ( v == val_ff )
             return i_c;
         else if ( v == val_un )
         {
             assert( reason[ c[ 0 ] ] == idx_undef );
             reason[ c[ 0 ] ] = i_c;
 
-            if ( sidx_t a_i = assign( c[ 0 ] ); a_i != idx_undef ) 
+            if ( sidx_t a_i = assign( c[ 0 ] ); a_i != idx_undef )
                 return a_i;
         }
     }
@@ -208,18 +215,18 @@ void solver::learn_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
 
     #ifdef CHECKED
         bool found = false;
-        for ( lit_t l : c ) 
+        for ( lit_t l : c )
             if ( l == r ) found = true;
         assert( found || r == 0 );
     #endif
 
-    for ( lit_t l : c ) 
+    for ( lit_t l : c )
     {
         if ( l == r ) continue;
 
-        if ( lit_level[ -l ] == decision_level ) 
+        if ( lit_level[ -l ] == decision_level )
             to_resolve[ -l ] = 1;
-        else 
+        else
         {
             if ( ! learnt_lit[ l ] )
                 learnt_clause.push_back( l );
@@ -240,9 +247,9 @@ size_t count_pos( literal_map< short > m, var_t var_count )
     return count;
 }
 
-std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c ) 
+std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
 {
-    idx_t last_d_i = decisions.back(); 
+    idx_t last_d_i = decisions.back();
 
     clause_t learnt_clause;
     learn_part( learnt_clause, i_c, 0 );
@@ -270,22 +277,54 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
         }
         j--;
     }
-    
+
     while ( ! to_resolve[ trail[ j ] ] )
         j--;
 
-    sidx_t next_dec_level = 0;
-    for ( auto &l : learnt_clause )
-    {
-        //logger.log( "wow", "%d@%d", -l, lit_level[ -l ] );
-
-        learnt_lit[ l ] = 0;
-        next_dec_level = std::max( next_dec_level, lit_level[ -l ] );
-    }
     to_resolve[ trail[ j ] ] = 0;
-    
     learnt_clause.push_back( - trail[ j ] );
     std::swap( learnt_clause[ 0 ], learnt_clause.back() );
+
+    /** Find the next dec level to which we are jumping. The level
+     *  has to be witnessed by some literal. The literal will
+     *  be the second in the clause.
+     *
+     *  Rational: In the next unit propagation, the first literal
+     *  is the one which will be asserted, the second will
+     *  be the first to be forgotten, thus if the second is false
+     *  the rest are also.
+     */
+
+    sidx_t next_dec_level = -1;
+    sidx_t next_dec_lit = -1;
+
+    if ( learnt_clause.size() == 1 )
+        next_dec_level = 0;
+    else
+    {
+        for ( idx_t i_l = 1; i_l < learnt_clause.size(); i_l++ )
+        {
+            auto &l = learnt_clause[ i_l ];
+            //logger.log( "wow", "%d@%d", -l, lit_level[ -l ] );
+            learnt_lit[ l ] = 0;
+            if ( lit_level[ -l ] > next_dec_level )
+            {
+                next_dec_level = lit_level[ -l ];
+                next_dec_lit = i_l;
+            }
+        }
+    }
+
+    assert( next_dec_level >= 0 );
+
+    // If there are more than two elements, make sure to make
+    // the dec. level literal the second.
+    if ( learnt_clause.size() > 2 )
+    {
+        assert( next_dec_lit > 0 );
+        std::swap( learnt_clause[ 1 ], learnt_clause[ next_dec_lit ] );
+    }
+
 
     #ifdef CHECKED
     for ( var_t v = 1; v <= var_count; v++ )
@@ -296,6 +335,13 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     #endif
 
     assert( next_dec_level >= 0 );
+
+    // Condition: the first literal is the first unique
+    //            the second is from
+    #ifdef CHECKED
+        if ( learnt_clause.size() > 1 )
+            assert( lit_level[ - learnt_clause[ 1 ] ] == next_dec_level );
+    #endif
 
     return std::pair( learnt_clause, next_dec_level );
 }
@@ -313,9 +359,19 @@ void solver::kill_trail( idx_t i )
     trail.resize( i );
 }
 
+void log_trail( const char *message, solver& s )
+{
+    for ( auto &l : s.trail )
+    {
+        logger.log( message, "%d@%d", l, s.lit_level[ l ] );
+    }
+}
+
 void solver::backtrack( sidx_t target_level )
 {
     logger.log( "backtrack", "%d", target_level  );
+
+    log_trail( "b", *this );
 
 
     idx_t last_dec = decisions.back();
@@ -335,11 +391,13 @@ void solver::backtrack( sidx_t target_level )
 
 idx_t solver::learn( clause_t c )
 {
-    logger.log( "learn", c ); 
+    logger.log( "learn", c );
+
+    //log_trail( "l", *this );
 
     idx_t i = clauses.size();
     clauses.push_back( c );
-    
+
     assert( ! c.empty() );
     watched_in[ c[ 0 ] ].push_back( i );
     if ( c.size() > 1 )
@@ -351,29 +409,33 @@ idx_t solver::learn( clause_t c )
 sat_t solver::solve()
 {
     for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
-        if ( clauses[ i_c ].size() == 1 ) 
+        if ( clauses[ i_c ].size() == 1 )
             unit_queue.push_back( i_c );
 
     while ( true )
     {
+        logger.log( "new cycle" );
+        log_trail( "new cycle", *this );
         // logger.log( "decisions", "%d", decisions.size() );
-        
+
         if ( sidx_t i_c = unit_propagation(); i_c != idx_undef )
         {
-            if ( decisions.empty() ) return UNSAT;
+            logger.log( "conflict", clauses[ i_c ] );
 
+            if ( decisions.empty() ) return UNSAT;
             unit_queue.clear();
 
             auto [ new_clause, target_level ] = conflict_anal( i_c );
 
             idx_t i_new_clause = learn( std::move( new_clause ) );
             backtrack( target_level );
+            logger.log( "new_clause", clauses[ i_new_clause ] );
             unit_queue.push_back( i_new_clause );
             continue;
-        } 
+        }
 
-        lit_t l = pick_literal();   
-        if ( l == 0 ) 
+        lit_t l = pick_literal();
+        if ( l == 0 )
             break;
 
         logger.log( "pick", "%d", l );
