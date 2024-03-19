@@ -72,7 +72,14 @@ bool solver::update_watches( lit_t l )
         if ( c[ 0 ] == -l ) 
             std::swap( c[ 0 ], c[ 1 ] );
 
+        assert( -l == c[ 1 ] );
+
         /** State: c[0] != false, c[1] = false */
+
+        #ifdef CHECKED
+        assert( eval_lit( c[ 0 ] ) != val_ff );
+        assert( eval_lit( c[ 1 ] ) == val_ff );
+        #endif
 
         // Check if first is solved
         
@@ -82,6 +89,11 @@ bool solver::update_watches( lit_t l )
         }
 
         /** State: c[0] = unk, c[1] = false */
+
+        #ifdef CHECKED
+        assert( eval_lit( c[ 0 ] ) == val_un );
+        assert( eval_lit( c[ 1 ] ) == val_ff );
+        #endif
 
         bool found = false;
         for ( idx_t i_l = 2; i_l < c.size(); i_l++ ) 
@@ -109,8 +121,13 @@ bool solver::update_watches( lit_t l )
         if ( ! found )
         {
             // Condition: c[0] = unk; c[1:] = false;
+            #ifdef CHECKED
+            assert( eval_lit( c[ 0 ] ) == val_un );
+            for ( idx_t i = 1; i < c.size(); i++ )
+                assert( eval_lit( c[ i ] ) == val_ff );
+            #endif
             logger.log( "unitprop", "%d", i_c );
-            unit_queue.push( i_c );
+            unit_queue.push_back( i_c );
             i_w_l++;
         }
         // Else: c[0] = true or c[0] = unk, c[1] = unk
@@ -149,13 +166,19 @@ void solver::backtrack()
 
 bool solver::unit_propagation()
 {
+
     while ( ! unit_queue.empty() )
     {
         idx_t i_c = unit_queue.front();
-        unit_queue.pop();
+        unit_queue.pop_front();
         auto &c = clauses[ i_c ];
 
         // Condition: all except first literal are false
+        
+        #ifdef CHECKED
+        for ( idx_t i = 1; i < c.size(); i++ )
+            assert( eval_lit( c[ i ] ) == val_ff );
+        #endif
         
         // First is false
         val_t v = eval_lit( c[ 0 ] );
@@ -181,13 +204,14 @@ sat_t solver::solve()
 {
     for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
         if ( clauses[ i_c ].size() == 1 ) 
-            unit_queue.push( i_c );
+            unit_queue.push_back( i_c );
 
     while ( true )
     {
         // logger.log( "decisions", "%d", decisions.size() );
         if ( unit_propagation() )
         {
+            unit_queue.clear();
             if ( decisions.empty() ) return UNSAT;
             backtrack();
             continue;

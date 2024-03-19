@@ -3,7 +3,7 @@
 #include "base.hpp"
 
 #include <vector>
-#include <queue>
+#include <deque>
 #include <cmath>
 
 using val_t = float;
@@ -59,7 +59,7 @@ struct solver
 
     std::vector< idx_t > decisions;
 
-    std::queue< idx_t > unit_queue;
+    std::deque< idx_t > unit_queue;
 
     val_t eval_lit( lit_t l );
 

@@ -20,8 +20,17 @@ clause_t parse_clause()
 cnf_t parse_dimacs()
 {
     std::string s;
+
+    std::cin >> s;
+
+    while ( s == "c" ) 
+    {
+        std::getline( std::cin, s );
+        std::cin >> s;
+    }
+
     unsigned int var_count, clause_count;
-    std::cin >> s >> s >> var_count >> clause_count;
+    std::cin >> s >> var_count >> clause_count;
 
     cnf_t cnf{ {}, var_count };
     for( unsigned int i = 0; i < clause_count; i++ )

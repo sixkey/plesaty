@@ -17,12 +17,12 @@ void sat_solve( cnf_t cnf )
     {
         std::cout << "SAT" << std::endl;
 
-        std::cout << "[";
-        for ( idx_t v = 0; v < s.var_count; v++ )
-        {
-            std::cout << s.values[ v + 1 ] << ", ";
-        }
-        std::cout << "]\n";
+        //std::cout << "[";
+        //for ( idx_t v = 0; v < s.var_count; v++ )
+        //{
+            //std::cout << s.values[ v + 1 ] << ", ";
+        //}
+        //std::cout << "]\n";
 
         return;
     }
@@ -38,10 +38,10 @@ int main()
 {
     cnf_t cnf = parse_dimacs();
 
-    std::cout << "PROBLEM" << std::endl;
-    show_dimacs( cnf );
+    // std::cout << "PROBLEM" << std::endl;
+    // show_dimacs( cnf );
 
-    std::cout << "SOLUTION" << std::endl;
+    // std::cout << "SOLUTION" << std::endl;
     sat_solve( std::move( cnf ) );
 }
 
