@@ -23,6 +23,11 @@ struct literal_map
 
     size_t var_count;
 
+    literal_map( size_t var_count, T def ) : var_count( var_count )
+    {
+        content.resize( var_count * 2, def );
+    }
+
     literal_map( size_t var_count ) : var_count( var_count )
     {
         content.resize( var_count * 2 );
@@ -35,9 +40,13 @@ struct literal_map
     }
 };
 
+
+
 struct solver
 {
     size_t var_count;
+    var_t var_counter = 1;
+
     std::vector< std::vector< lit_t > > clauses;
 
     // Constructor
@@ -45,8 +54,6 @@ struct solver
     solver( cnf_t cnf );  
 
     // Picking literal
-
-    var_t var_counter = 1;
     
     lit_t pick_literal();
 
@@ -54,24 +61,43 @@ struct solver
     
     literal_map< std::vector< idx_t > > watched_in;
 
+    literal_map< sidx_t > reason;
+
     std::vector< val_t > values;
     std::vector< lit_t > trail;
-
     std::vector< idx_t > decisions;
+
+    literal_map< sidx_t > lit_level;
+    sidx_t decision_level = 0;
 
     std::deque< idx_t > unit_queue;
 
+    literal_map< short > to_resolve;
+    literal_map< short > learnt_lit;
+
+    
+
     val_t eval_lit( lit_t l );
 
-    bool decide( lit_t l );
+    sidx_t decide( lit_t l );
 
-    bool update_watches( lit_t l );
+    sidx_t assign( lit_t l );
 
-    bool assign( lit_t l );
+    sidx_t update_watches( lit_t l );
 
-    void backtrack();
+    sidx_t unit_propagation();
 
-    bool unit_propagation();
+    void kill_trail( idx_t i );
+
+    void backtrack( sidx_t dec_level );
+
+    idx_t learn( clause_t c );
+
+    void learn_part( clause_t& learnt_clause
+                   , idx_t i_c
+                   , lit_t r );
+
+    std::pair< clause_t, idx_t > conflict_anal( sidx_t i_c );
 
     bool done();
 

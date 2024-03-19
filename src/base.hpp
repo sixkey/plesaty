@@ -7,6 +7,9 @@ using lit_t    = int;
 using var_t    = unsigned int;
 using clause_t = std::vector< lit_t >;
 using idx_t    = size_t;
+using sidx_t   = long long; 
+
+const sidx_t idx_undef = -1;
 
 enum sat_t 
 {
