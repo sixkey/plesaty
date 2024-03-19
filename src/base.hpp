@@ -1,8 +1,12 @@
 #pragma once
 
 #include <vector>
+#include <stddef.h>
 
-using clause_t = std::vector< int >;
+using lit_t    = int;
+using var_t    = unsigned int;
+using clause_t = std::vector< lit_t >;
+using idx_t    = size_t;
 
 enum sat_t 
 {
