@@ -9,27 +9,28 @@ void sat_solve( cnf_t cnf )
 
     if ( res == UNSAT )
     {
-        std::cout << "UNSAT" << std::endl;
+        std::cout << "s UNSATISFIABLE" << std::endl;
         return;
     }
 
     if ( res == SAT ) 
     {
-        std::cout << "SAT" << std::endl;
+        std::cout << "s SATISFIABLE" << std::endl;
 
-        //std::cout << "[";
-        //for ( idx_t v = 0; v < s.var_count; v++ )
-        //{
-            //std::cout << s.values[ v + 1 ] << ", ";
-        //}
-        //std::cout << "]\n";
+        // print model
+        std::cout << "v ";
+        for ( sidx_t v = 1; v <= s.var_count; v++ )
+        {
+            std::cout << (s.values[ v ] == val_tt ? v : -v) << " ";
+        }
+        std::cout << "0\n";
 
         return;
     }
 
     if ( res == UNKNOWN )
     {
-        std::cout << "UNKNOWN" << std::endl;
+        std::cout << "s UNKNOWN" << std::endl;
         return;
     }
 }
