@@ -172,6 +172,7 @@ def run_benchmarks(solver_path, timeout, jobs):
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python3 eval.py <path_to_solver> <solver_timeout_seconds> <n_jobs>")
+        exit(1)
 
     if not os.path.isdir(benchmarks_dir):
         print("Downloading benchmarks...")
