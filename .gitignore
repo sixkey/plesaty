@@ -9,5 +9,6 @@
 !src/*.hpp
 !src/CMakeLists.txt
 
+!evaluator
 !evaluator/eval.py
 
