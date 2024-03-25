@@ -6,3 +6,11 @@ Autori:
 
 - [514391] Filip Kučerák
 - [514154] Adam Štafa
+
+## Inštalácia
+
+```
+cmake -B build
+make -C build
+build/src/sat
+```
