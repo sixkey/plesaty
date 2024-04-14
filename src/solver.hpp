@@ -46,6 +46,42 @@ struct literal_map
     }
 };
 
+struct literal_set
+{
+    std::vector< char > content;
+
+    size_t var_count;
+
+    size_t size;
+
+    literal_set( size_t var_count ) : var_count( var_count ), size( 0 )
+    {
+        content.resize( var_count * 2 );
+    }
+
+    bool contains( lit_t l )
+    {
+        return content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+    }
+
+    bool add( lit_t l )
+    {
+        auto &el = content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+        if ( !el )
+            ++size;
+        el = 1;
+    }
+
+    bool remove( lit_t l )
+    {
+        auto &el = content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+        if ( el )
+            --size;
+        el = 0;
+
+    }
+};
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Solver /////////////////////////////////////////////////////////////////////
@@ -101,8 +137,8 @@ struct solver
     sidx_t decision_level = 0;
 
     literal_map< sidx_t > reason;
-    literal_map< short > to_resolve;
-    literal_map< short > learnt_lit;
+    literal_set to_resolve;
+    literal_set learnt_lit;
 
     void resolve_part( clause_t& learnt_clause
                      , idx_t i_c

@@ -20,18 +20,6 @@ void log_trail( const char *message, solver& s )
 }
 
 
-size_t count_pos( literal_map< short > m, var_t var_count )
-{
-    size_t count = 0;
-    for ( var_t v = 1; v <= var_count; v++ )
-    {
-        if ( m[ v ] ) count += 1;
-        if ( m[ -v ] ) count += 1;
-    }
-    return count;
-}
-
-
 /// Solver ////////////////////////////////////////////////////////////////////
 
 
@@ -40,8 +28,8 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , watched_in( cnf.var_count )
                             , lit_level( cnf.var_count, -1 )
                             , reason( cnf.var_count, idx_undef )
-                            , to_resolve( cnf.var_count, 0 )
-                            , learnt_lit( cnf.var_count, 0 )
+                            , to_resolve( cnf.var_count )
+                            , learnt_lit( cnf.var_count )
 {
     values.resize( cnf.var_count + 1, val_un );
 
@@ -328,7 +316,7 @@ void solver::resolve_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
     auto &c = clauses[ i_c ];
 
     if ( r != 0 )
-        to_resolve[ r ] = 0;
+        to_resolve.remove( r );
 
     #ifdef CHECKED
         bool found = false;
@@ -342,12 +330,12 @@ void solver::resolve_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
         if ( l == r ) continue;
 
         if ( lit_level[ -l ] == decision_level )
-            to_resolve[ -l ] = 1;
+            to_resolve.add( -l );
         else
         {
-            if ( ! learnt_lit[ l ] )
+            if ( ! learnt_lit.contains( l ) )
                 learnt_clause.push_back( l );
-            learnt_lit[ l ] = 1;
+            learnt_lit.add( l );
         }
     }
 }
@@ -364,22 +352,22 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     bool found = false;
     for ( var_t v = 1; v <= var_count; v++ )
     {
-        assert( ! to_resolve[ v ] || ! to_resolve[ -v ] );
-        found = found || to_resolve[ v ] || to_resolve[ -v ];
+        assert( ! to_resolve.contains( v ) || ! to_resolve.contains( -v ) );
+        found = found || to_resolve.contains( v ) || to_resolve.contains( -v );
     }
     assert( found );
-    assert( count_pos( to_resolve, var_count ) >= 1 );
+    assert( to_resolve.size >= 1 );
     #endif
 
     idx_t j = trail.size() - 1;
 
     // TODO: the set should remember the count, no need
     // to do this all the time.
-    while ( count_pos( to_resolve, var_count ) > 1 )
+    while ( to_resolve.size > 1 )
     {
         assert( j > last_d_i );
         auto &t_j = trail[ j ];
-        if ( to_resolve[ t_j ] )
+        if ( to_resolve.contains( t_j ) )
         {
             assert( reason[ t_j ] != idx_undef );
             resolve_part( learnt_clause, reason[ t_j ], t_j );
@@ -387,10 +375,10 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
         j--;
     }
 
-    while ( ! to_resolve[ trail[ j ] ] )
+    while ( ! to_resolve.contains( trail[ j ] ) )
         j--;
 
-    to_resolve[ trail[ j ] ] = 0;
+    to_resolve.remove( trail[ j ] );
     learnt_clause.push_back( - trail[ j ] );
     std::swap( learnt_clause[ 0 ], learnt_clause.back() );
 
@@ -415,7 +403,7 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
         {
             auto &l = learnt_clause[ i_l ];
             //logger.log( "wow", "%d@%d", -l, lit_level[ -l ] );
-            learnt_lit[ l ] = 0;
+            learnt_lit.remove( l );
             if ( lit_level[ -l ] > next_dec_level )
             {
                 next_dec_level = lit_level[ -l ];
@@ -438,8 +426,8 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     #ifdef CHECKED
     for ( var_t v = 1; v <= var_count; v++ )
     {
-        assert( to_resolve[ v ] == 0 && to_resolve[ -v ] == 0 );
-        assert( learnt_lit[ v ] == 0 && learnt_lit[ -v ] == 0 );
+        assert( ! to_resolve.contains( v ) && ! to_resolve.contains( -v ) );
+        assert( ! learnt_lit.contains( v ) && ! learnt_lit.contains( -v ) );
     }
     #endif
 
