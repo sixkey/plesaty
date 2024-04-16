@@ -374,6 +374,7 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
         {
             assert( reason[ t_j ] != idx_undef );
             resolve_part( learnt_clause, reason[ t_j ], t_j );
+            bump( var_of_lit( t_j ) );
         }
         j--;
     }
@@ -384,6 +385,10 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     to_resolve.remove( trail[ j ] );
     learnt_clause.push_back( - trail[ j ] );
     std::swap( learnt_clause[ 0 ], learnt_clause.back() );
+
+    for ( auto l : learnt_clause )
+        bump( var_of_lit( l ) );
+    increase_bump();
 
     /** Find the next dec level to which we are jumping. The level
      *  has to be witnessed by some literal. The literal will
@@ -460,10 +465,6 @@ idx_t solver::learn( clause_t c )
     watched_in[ c[ 0 ] ].push_back( i );
     if ( c.size() > 1 )
         watched_in[ c[ 1 ] ].push_back( i );
-
-    for ( auto l : c )
-        bump( var_of_lit( l ) );
-    increase_bump();
 
     return i;
 }
