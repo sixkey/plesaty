@@ -30,6 +30,7 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , reason( cnf.var_count, idx_undef )
                             , to_resolve( cnf.var_count )
                             , learnt_lit( cnf.var_count )
+                            , heap( cnf.var_count )
 {
     values.resize( cnf.var_count + 1, val_un );
 
@@ -88,9 +89,12 @@ sat_t solver::solve()
 
 lit_t solver::pick_literal()
 {
-    for ( idx_t v_i = 1; v_i < var_count + 1; v_i++ )
-        if ( values[ v_i ] == val_un )
-            return - v_i;
+    while ( heap.size > 0 )
+    {
+        var_t v = heap.extract_max();
+        if ( values[ v ] == val_un )
+            return - v;
+    }
     return 0;
 }
 
@@ -135,6 +139,7 @@ void solver::kill_trail( idx_t i )
         auto &t_j = trail[ j ];
         values[ var_of_lit( t_j ) ] = val_un;
         reason[ t_j ] = idx_undef;
+        heap.push( var_of_lit( t_j ) );
         lit_level[ t_j ] = -1;
     }
     trail.resize( i );
@@ -456,6 +461,29 @@ idx_t solver::learn( clause_t c )
     if ( c.size() > 1 )
         watched_in[ c[ 1 ] ].push_back( i );
 
+    for ( auto l : c )
+        bump( var_of_lit( l ) );
+    increase_bump();
+
     return i;
 }
 
+void solver::increase_bump()
+{
+    bump_size *= bump_step;
+
+    double max_bump = 42069420.1337;
+    if ( bump_size > max_bump )
+    {
+        for ( size_t i = 0; i < var_count; i ++ )
+        {
+            heap.content[ i ].first /= bump_size;
+        }
+        bump_size = 1.0;
+    }
+}
+
+void solver::bump( var_t var )
+{
+    heap.set_priority( var, heap.content[ heap.var_idx[ var ] ].first + bump_size );
+}

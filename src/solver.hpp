@@ -88,6 +88,9 @@ struct var_heap
 
     void push( var_t var )
     {
+        if ( var_idx[ var ] < size )
+            return;
+
         swap( size, var_idx[ var ] );
         ++ size;
         move_up( size - 1 );
@@ -97,8 +100,11 @@ struct var_heap
     {
         content[ var_idx[ var ] ].first = p;
 
-        move_up( var_idx[ var ] );
-        move_down( var_idx[ var ] );
+        if ( var_idx[ var ] < size )
+        {
+            move_up( var_idx[ var ] );
+            move_down( var_idx[ var ] );
+        }
     }
 
     void move_up( size_t i )
@@ -211,5 +217,13 @@ struct solver
 
     idx_t learn( clause_t c );
 
+    // EVSIDS
 
+    var_heap heap;
+    double bump_step = 1.01;
+    double bump_size = 1.0;
+
+    void increase_bump();
+
+    void bump( var_t var );
 };
