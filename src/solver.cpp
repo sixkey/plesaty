@@ -76,6 +76,8 @@ sat_t solver::solve()
             if ( conflict_count >= next_restart )
             {
                 logger.log( "restart" );
+                if ( target_level == 0 )
+                    unit_queue.push_back( i_new_clause );
                 restart();
             }
             else
@@ -511,9 +513,7 @@ void solver::bump( var_t var )
 // Restarts
 void solver::restart()
 {
-    decisions.clear();
-    decision_level = 0;
-    kill_trail( 0 );
+    backtrack(0);
     for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
         if ( clauses[ i_c ].size() == 1 )
             unit_queue.push_back( i_c );
