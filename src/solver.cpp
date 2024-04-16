@@ -31,6 +31,7 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , to_resolve( cnf.var_count )
                             , learnt_lit( cnf.var_count )
                             , heap( cnf.var_count )
+                            , luby_gen( 420 )
 {
     values.resize( cnf.var_count + 1, val_un );
 
@@ -42,6 +43,8 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
         if ( c.size() > 1 )
             watched_in[ c[ 1 ] ].push_back( i );
     }
+
+    next_restart = luby_gen.next();
 }
 
 
@@ -60,6 +63,7 @@ sat_t solver::solve()
         if ( sidx_t i_c = unit_propagation(); i_c != idx_undef )
         {
             logger.log( "conflict", clauses[ i_c ] );
+            ++conflict_count;
 
             if ( decisions.empty() ) return UNSAT;
             unit_queue.clear();
@@ -67,9 +71,18 @@ sat_t solver::solve()
             auto [ new_clause, target_level ] = conflict_anal( i_c );
 
             idx_t i_new_clause = learn( std::move( new_clause ) );
-            backtrack( target_level );
+
             logger.log( "new_clause", clauses[ i_new_clause ] );
-            unit_queue.push_back( i_new_clause );
+            if ( conflict_count >= next_restart )
+            {
+                logger.log( "restart" );
+                restart();
+            }
+            else
+            {
+                backtrack( target_level );
+                unit_queue.push_back( i_new_clause );
+            }
             continue;
         }
 
@@ -403,6 +416,8 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
     sidx_t next_dec_level = -1;
     sidx_t next_dec_lit = -1;
 
+    assert( learnt_clause.size() != 0 );
+
     if ( learnt_clause.size() == 1 )
         next_dec_level = 0;
     else
@@ -412,9 +427,11 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
             auto &l = learnt_clause[ i_l ];
             //logger.log( "wow", "%d@%d", -l, lit_level[ -l ] );
             learnt_lit.remove( l );
+            assert( lit_level[ -l ] >= 0 );
             if ( lit_level[ -l ] > next_dec_level )
             {
                 next_dec_level = lit_level[ -l ];
+                assert( next_dec_level >= 0 );
                 next_dec_lit = i_l;
             }
         }
@@ -469,6 +486,8 @@ idx_t solver::learn( clause_t c )
     return i;
 }
 
+// EVSIDS
+
 void solver::increase_bump()
 {
     bump_size *= bump_step;
@@ -487,4 +506,17 @@ void solver::increase_bump()
 void solver::bump( var_t var )
 {
     heap.set_priority( var, heap.content[ heap.var_idx[ var ] ].first + bump_size );
+}
+
+// Restarts
+void solver::restart()
+{
+    decisions.clear();
+    decision_level = 0;
+    kill_trail( 0 );
+    for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
+        if ( clauses[ i_c ].size() == 1 )
+            unit_queue.push_back( i_c );
+    conflict_count = 0;
+    next_restart = luby_gen.next();
 }

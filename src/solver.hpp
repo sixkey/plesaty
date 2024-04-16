@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.hpp"
+#include "sequences.hpp"
 
 #include <vector>
 #include <deque>
@@ -226,4 +227,11 @@ struct solver
     void increase_bump();
 
     void bump( var_t var );
+
+    // Restarts
+    size_t next_restart;
+    size_t conflict_count;
+    luby luby_gen;
+
+    void restart();
 };
