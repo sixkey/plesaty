@@ -361,8 +361,6 @@ std::pair< clause_t, idx_t > solver::conflict_anal( sidx_t i_c )
 
     idx_t j = trail.size() - 1;
 
-    // TODO: the set should remember the count, no need
-    // to do this all the time.
     while ( to_resolve.size > 1 )
     {
         assert( j > last_d_i );
