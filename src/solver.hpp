@@ -234,4 +234,7 @@ struct solver
     luby luby_gen;
 
     void restart();
+
+    // Phase saving
+    std::vector< val_t > phases;
 };

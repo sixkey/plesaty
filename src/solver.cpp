@@ -34,6 +34,7 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , luby_gen( 420 )
 {
     values.resize( cnf.var_count + 1, val_un );
+    phases.resize( cnf.var_count + 1, val_tt );
 
     for ( idx_t i = 0; i < clauses.size(); i++ )
     {
@@ -132,7 +133,7 @@ sidx_t solver::decide( lit_t l )
 {
     decisions.push_back( trail.size() );
     decision_level += 1;
-    return assign( l );
+    return assign( l * ( phases[ var_of_lit( l ) ] == val_tt ? 1 : -1 ) );
 }
 
 
@@ -140,6 +141,7 @@ sidx_t solver::assign( lit_t l )
 {
     logger.log( "assign", "%d@%d", l, decision_level );
     values[ var_of_lit( l ) ] = val_of_lit( l );
+    phases[ var_of_lit( l ) ] = l > 0 ? val_tt : val_ff;
     trail.push_back( l );
     lit_level[ l ] = decision_level;
     return update_watches( l );
