@@ -11,7 +11,7 @@
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// Solver /////////////////////////////////////////////////////////////////////
+// Solver data structures /////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,17 +25,17 @@ struct literal_set
 
     literal_set( size_t var_count ) : var_count( var_count ), size( 0 )
     {
-        content.resize( var_count * 2 );
+        content.resize( var_count * 2 + 1);
     }
 
     bool contains( lit_t l )
     {
-        return content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+        return content[ l + var_count ];
     }
 
     void add( lit_t l )
     {
-        auto &el = content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+        auto &el = content[ l + var_count ];
         if ( !el )
             ++size;
         el = 1;
@@ -43,7 +43,7 @@ struct literal_set
 
     void remove( lit_t l )
     {
-        auto &el = content[ var_of_lit( l ) - 1 + val_of_lit( l ) * var_count ];
+        auto &el = content[ l + var_count ];
         if ( el )
             --size;
         el = 0;
@@ -153,6 +153,60 @@ struct var_heap
     }
 };
 
+struct clause_collection
+{
+    std::vector< lit_t > content_1;
+    std::vector< lit_t > content_2;
+    std::vector< lit_t > content_rest;
+    std::vector< size_t > beginnings;
+    std::vector< size_t > sizes;
+    size_t count;
+
+    clause_collection( std::vector< clause_t > formula ) : content_1(), content_2(), beginnings(), count( 0 )
+    {
+        for ( auto &clause : formula )
+        {
+            add( clause );
+        }
+    }
+
+    size_t size( idx_t i )
+    {
+        return sizes[ i ];
+    }
+
+    lit_t& operator() ( size_t i_c, size_t i_l )
+    {
+        #ifdef CHECKED
+            assert( i_c >= 0 && i_c < count );
+            assert( i_l < size( i_c ));
+        #endif
+        if ( i_l == 0)
+            return content_1[ i_c ];
+        if ( i_l == 1 )
+            return content_2[ i_c ];
+        return content_rest[ beginnings[ i_c ] + i_l - 2 ];
+    }
+
+    void add( clause_t &clause )
+    {
+        ++count;
+        sizes.push_back( clause.size() );
+        content_1.push_back( clause[ 0 ] );
+        beginnings.push_back( content_rest.size() );
+        if ( clause.size() > 1 )
+        {
+            content_2.push_back( clause[ 1 ] );
+            content_rest.insert( content_rest.end(), clause.begin() + 2, clause.end() );
+        }
+        else
+        {
+            content_2.push_back( 0 );
+        }
+    }
+};
+
+
 ///////////////////////////////////////////////////////////////////////////////
 // Solver /////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -167,7 +221,7 @@ struct solver
 
     size_t var_count;
 
-    std::vector< std::vector< lit_t > > clauses;
+    clause_collection clauses;
 
     // Picking literal
 

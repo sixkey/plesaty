@@ -12,7 +12,7 @@ if( CMAKE_BUILD_TYPE STREQUAL "Debug" )
     add_compile_options( -DCHECKED -DLOG )
 endif()
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" )
 
 add_subdirectory( src )
 

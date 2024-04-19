@@ -32,17 +32,17 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
                             , learnt_lit( cnf.var_count )
                             , heap( cnf.var_count )
                             , luby_gen( 420 )
+                            , conflict_count( 0 )
 {
     values.resize( cnf.var_count + 1, val_un );
     phases.resize( cnf.var_count + 1, val_tt );
 
-    for ( idx_t i = 0; i < clauses.size(); i++ )
+    for ( idx_t i = 0; i < clauses.count; i++ )
     {
-        auto &c = clauses[ i ];
-        assert( ! c.empty() );
-        watched_in[ c[ 0 ] ].push_back( i );
-        if ( c.size() > 1 )
-            watched_in[ c[ 1 ] ].push_back( i );
+        assert( clauses.size( i ) != 0 );
+        watched_in[ clauses( i, 0 ) ].push_back( i );
+        if ( clauses.size(i) > 1 )
+            watched_in[ clauses( i, 1 ) ].push_back( i );
     }
 
     next_restart = luby_gen.next();
@@ -51,8 +51,8 @@ solver::solver( cnf_t cnf ) : var_count( cnf.var_count )
 
 sat_t solver::solve()
 {
-    for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
-        if ( clauses[ i_c ].size() == 1 )
+    for ( idx_t i_c = 0; i_c < clauses.count; i_c++ )
+        if ( clauses.size( i_c ) == 1 )
             unit_queue.push_back( i_c );
 
     while ( true )
@@ -63,7 +63,7 @@ sat_t solver::solve()
 
         if ( sidx_t i_c = unit_propagation(); i_c != idx_undef )
         {
-            logger.log( "conflict", clauses[ i_c ] );
+            // logger.log( "conflict", clauses[ i_c ] );
             ++conflict_count;
 
             if ( decisions.empty() ) return UNSAT;
@@ -72,8 +72,7 @@ sat_t solver::solve()
             auto [ new_clause, target_level ] = conflict_anal( i_c );
 
             idx_t i_new_clause = learn( std::move( new_clause ) );
-
-            logger.log( "new_clause", clauses[ i_new_clause ] );
+            // logger.log( "new_clause", clauses[ i_new_clause ] );
             if ( conflict_count >= next_restart )
             {
                 logger.log( "restart" );
@@ -120,9 +119,13 @@ lit_t solver::pick_literal()
 
 val_t solver::eval_lit( lit_t l )
 {
-    if ( l > 0 ) return values[ var_of_lit( l ) ];
-    if ( l < 0 ) return 1 - values[ var_of_lit( l ) ];
-    assert( false );
+    // branchless version of the commented-out code
+    auto v = values[ var_of_lit( l ) ];
+    return ( l > 0 ) * v + ( l < 0 ) * negate( v );
+
+    // if ( l > 0 ) return values[ var_of_lit( l ) ];
+    // if ( l < 0 ) return negate( values[ var_of_lit( l ) ] );
+    // assert( false );
 }
 
 
@@ -133,7 +136,7 @@ sidx_t solver::decide( lit_t l )
 {
     decisions.push_back( trail.size() );
     decision_level += 1;
-    return assign( l * ( phases[ var_of_lit( l ) ] == val_tt ? 1 : -1 ) );
+    return assign( phases[ var_of_lit( l ) ] == val_tt ? l : -l );
 }
 
 
@@ -195,18 +198,17 @@ sidx_t solver::update_watches( lit_t l )
     while ( i_w_l < w_l.size() )
     {
         idx_t i_c = w_l[ i_w_l ];
-        auto &c = clauses[ i_c ];
 
-        assert( c.size() > 1 );
+        assert( clauses.size( i_c ) > 1 );
 
         // If the clause is unit
 
-        if ( eval_lit( c[ 0 ] ) == val_ff
-          && eval_lit( c[ 1 ] ) == val_ff )
+        if ( eval_lit( clauses( i_c, 0 ) ) == val_ff
+          && eval_lit( clauses( i_c, 1 ) ) == val_ff )
         {
 #ifdef CHECKED
-            for ( auto &l : c )
-                assert( eval_lit( l ) == val_ff );
+            for ( size_t i = 0; i < clauses.size( i_c ); ++i )
+                assert( eval_lit( clauses( i_c, i ) ) == val_ff );
 #endif
             return i_c;
         }
@@ -214,21 +216,21 @@ sidx_t solver::update_watches( lit_t l )
 
         // wlog: l is in the 1 position.
 
-        if ( c[ 0 ] == -l )
-            std::swap( c[ 0 ], c[ 1 ] );
+        if ( clauses( i_c, 0 ) == -l )
+            std::swap( clauses( i_c, 0 ), clauses( i_c, 1 ) );
 
-        assert( -l == c[ 1 ] );
+        assert( -l == clauses( i_c, 1 ) );
 
         /** State: c[0] != false, c[1] = false */
 
         #ifdef CHECKED
-        assert( eval_lit( c[ 0 ] ) != val_ff );
-        assert( eval_lit( c[ 1 ] ) == val_ff );
+        assert( eval_lit( clauses( i_c, 0 ) ) != val_ff );
+        assert( eval_lit( clauses( i_c, 1 ) ) == val_ff );
         #endif
 
         // Check if first is solved
 
-        if ( eval_lit( c[ 0 ] ) == val_tt ) {
+        if ( eval_lit( clauses( i_c, 0 ) ) == val_tt ) {
             i_w_l++;
             continue;
         }
@@ -236,27 +238,27 @@ sidx_t solver::update_watches( lit_t l )
         /** State: c[0] = unk, c[1] = false */
 
         #ifdef CHECKED
-        assert( eval_lit( c[ 0 ] ) == val_un );
-        assert( eval_lit( c[ 1 ] ) == val_ff );
+        assert( eval_lit( clauses( i_c, 0 ) ) == val_un );
+        assert( eval_lit( clauses( i_c, 1 ) ) == val_ff );
         #endif
 
         bool found = false;
-        for ( idx_t i_l = 2; i_l < c.size(); i_l++ )
+        for ( idx_t i_l = 2; i_l < clauses.size( i_c ); i_l++ )
         {
-            val_t v = eval_lit( c[ i_l ] );
+            val_t v = eval_lit( clauses( i_c, i_l ) );
             if ( v == val_tt || v == val_un ) {
 
-                watched_in[ c[ i_l ] ].push_back( i_c );
+                watched_in[ clauses( i_c, i_l ) ].push_back( i_c );
 
                 std::swap( w_l[ i_w_l ], w_l.back() );
                 w_l.pop_back();
 
-                std::swap( c[ i_l ], c[ 1 ] );
+                std::swap( clauses( i_c, i_l ), clauses( i_c, 1 ) );
                 if ( v == val_tt ) {
                     // This swap is so that watched_in[ c[ 0 ] ] is
                     // the list through which we are iterating so
                     // that we can kick the clause in the current list.
-                    std::swap( c[ 0 ], c[ 1 ] );
+                    std::swap( clauses( i_c, 0 ), clauses( i_c, 1 ) );
                 }
                 found = true;
                 break;
@@ -267,9 +269,9 @@ sidx_t solver::update_watches( lit_t l )
         {
             // Condition: c[0] = unk; c[1:] = false;
             #ifdef CHECKED
-            assert( eval_lit( c[ 0 ] ) == val_un );
-            for ( idx_t i = 1; i < c.size(); i++ )
-                assert( eval_lit( c[ i ] ) == val_ff );
+            assert( eval_lit( clauses( i_c, 0 ) ) == val_un );
+            for ( idx_t i = 1; i < clauses.size( i_c ); i++ )
+                assert( eval_lit( clauses( i_c, i ) ) == val_ff );
             #endif
             logger.log( "unitprop", "%d", i_c );
             unit_queue.push_back( i_c );
@@ -291,25 +293,27 @@ sidx_t solver::unit_propagation()
         //logger.log( "unit decs", decisions );
         idx_t i_c = unit_queue.front();
         unit_queue.pop_front();
-        auto &c = clauses[ i_c ];
 
         // Condition: all except first literal are false
 
         #ifdef CHECKED
-        for ( idx_t i = 1; i < c.size(); i++ )
+        for ( idx_t i = 1; i < clauses.size( i_c ); i++ )
         {
-            if ( eval_lit( c[ i ] ) != val_ff )
+            if ( eval_lit( clauses( i_c, i ) ) != val_ff )
             {
-                logger.log( "PROBLEM", c );
-                for ( auto &l : c )
+                // logger.log( "PROBLEM", c );
+                for ( size_t i = 0; i < clauses.size( i_c ); ++i )
+                {
+                    lit_t l = clauses( i_c, i );
                     logger.log( "PROBLEM", "%d@%d -> %f", -l, lit_level[ -l ], eval_lit( l ) );
+                }
             }
-            assert( eval_lit( c[ i ] ) == val_ff );
+            assert( eval_lit( clauses( i_c, i) ) == val_ff );
         }
         #endif
 
         // First is false
-        val_t v = eval_lit( c[ 0 ] );
+        val_t v = eval_lit( clauses( i_c, 0 ) );
 
         //logger.log( "lol", "%d, %d = %d", c[ 0 ], c[ 1 ], v );
 
@@ -319,10 +323,10 @@ sidx_t solver::unit_propagation()
             return i_c;
         else if ( v == val_un )
         {
-            assert( reason[ c[ 0 ] ] == idx_undef );
-            reason[ c[ 0 ] ] = i_c;
+            assert( reason[ clauses( i_c, 0 ) ] == idx_undef );
+            reason[ clauses( i_c, 0 ) ] = i_c;
 
-            if ( sidx_t a_i = assign( c[ 0 ] ); a_i != idx_undef )
+            if ( sidx_t a_i = assign( clauses( i_c, 0 ) ); a_i != idx_undef )
                 return a_i;
         }
     }
@@ -335,20 +339,19 @@ sidx_t solver::unit_propagation()
 
 void solver::resolve_part( clause_t& learnt_clause, idx_t i_c, lit_t r )
 {
-    auto &c = clauses[ i_c ];
-
     if ( r != 0 )
         to_resolve.remove( r );
 
     #ifdef CHECKED
         bool found = false;
-        for ( lit_t l : c )
-            if ( l == r ) found = true;
+        for ( size_t i = 0; i < clauses.size( i_c ); ++i )
+            if ( clauses( i_c, i ) == r ) found = true;
         assert( found || r == 0 );
     #endif
 
-    for ( lit_t l : c )
+    for ( size_t i_l = 0; i_l < clauses.size( i_c ); ++i_l )
     {
+        lit_t l = clauses( i_c, i_l );
         if ( l == r ) continue;
 
         if ( lit_level[ -l ] == decision_level )
@@ -479,8 +482,8 @@ idx_t solver::learn( clause_t c )
 
     //log_trail( "l", *this );
 
-    idx_t i = clauses.size();
-    clauses.push_back( c );
+    idx_t i = clauses.count;
+    clauses.add( c );
 
     assert( ! c.empty() );
     watched_in[ c[ 0 ] ].push_back( i );
@@ -516,8 +519,8 @@ void solver::bump( var_t var )
 void solver::restart()
 {
     backtrack(0);
-    for ( idx_t i_c = 0; i_c < clauses.size(); i_c++ )
-        if ( clauses[ i_c ].size() == 1 )
+    for ( idx_t i_c = 0; i_c < clauses.count; i_c++ )
+        if ( clauses.size( i_c ) == 1 )
             unit_queue.push_back( i_c );
     conflict_count = 0;
     next_restart = luby_gen.next();
