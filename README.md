@@ -2,16 +2,16 @@
 
 Projekt do kurzu [IA085](https://is.muni.cz/auth/predmet/fi/jaro2024/IA085).
 
-## Inštalácia
+## Installation
 
 ```
 cmake -B build
 make -C build
 ```
 
-## Pustenie solveru
+## Running the solver
 
-Rozhranie Solveru je pomocou stdin a stdout, napr.
+Interface using stdin and stdout, eg.
 
 ```
 > cat test.dimacs | build/src/sat
